@@ -2,7 +2,7 @@ import unittest
 import os
 from unittest.mock import patch
 
-from PR1.main import process_file, main
+from main import process_file, main
 
 
 class TestTextProcessing(unittest.TestCase):
@@ -63,7 +63,7 @@ class TestTextProcessing(unittest.TestCase):
 class TestMainFunction(unittest.TestCase):
 
     @patch('sys.argv', ['script.py', 'test_file.txt', 'word'])
-    @patch('PR1.main.process_file')  # Патчим process_file
+    @patch('main.process_file')  # Патчим process_file
     def test_main(self, mock_process_file):
         # Настроим mock, чтобы process_file возвращал нужные данные
         mock_process_file.return_value = (100, 10)

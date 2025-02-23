@@ -44,3 +44,6 @@ def main():
 
     print(f"Общее количество слов в файле: {total_words}")
     print(f"Количество повторений слова '{search_word}': {word_count}")
+
+if __name__ == "__main__":
+    main()
