@@ -14,11 +14,11 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         try:
             super().do_GET()
         except Exception:
-            self.send_error(500, "Внутренняя ошибка сервера")
+            self.send_error(500)
 
     def do_POST(self):
         """Обработка POST-запросов"""
-        self.send_error(405, "Метод не поддерживается")
+        self.send_error(405)
 
 class WebServer:
     """Класс для управления веб-сервером"""

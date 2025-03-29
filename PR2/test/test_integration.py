@@ -9,7 +9,7 @@ import websockets
 
 # Добавляем путь к директории с сервером
 sys.path.append(str(Path(__file__).parent))
-from server import AnalysisServer
+from PR2.server import AnalysisServer
 
 # Путь к тестовым файлам
 TEST_FILES_DIR = Path(__file__).parent / 'test_files'
