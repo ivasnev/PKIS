@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализатор файлов</title>
+    <style>
+        :root {
+            --primary-color: #2196f3;
+            --error-color: #d32f2f;
+            --success-color: #4caf50;
+            --text-color: #333;
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --border-color: #ccc;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--primary-color);
+        }
+
+        .drop-zone.dragover {
+            background-color: #e1f5fe;
+            border-color: var(--primary-color);
+        }
+
+        .results {
+            margin-top: 20px;
+        }
+
+        .result-item {
+            background-color: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .total {
+            font-weight: bold;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid var(--border-color);
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--primary-color);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: var(--error-color);
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #ffebee;
+            border-radius: 4px;
+            border-left: 4px solid var(--error-color);
+        }
+
+        .success {
+            color: var(--success-color);
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            border-left: 4px solid var(--success-color);
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .connection-status.connected {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .connection-status.disconnected {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .stats {
+            background-color: #fff3e0;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            border-left: 4px solid #ff9800;
+        }
+
+        .stats h3 {
+            margin-top: 0;
+            color: #f57c00;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .stats-item {
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .stats-item .value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .stats-item .label {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .refresh-stats {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .refresh-stats:hover {
+            background-color: #1976d2;
+        }
+
+        .file-list {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            margin: 4px 0;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .file-item button {
+            background-color: var(--error-color);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .file-item button:hover {
+            background-color: #b71c1c;
+        }
+
+        .button-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .analyze-button {
+            background-color: var(--success-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        .analyze-button:hover {
+            background-color: #388e3c;
+        }
+
+        .analyze-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Анализатор текстовых файлов</h1>
+        
+        <div class="connection-status" id="connectionStatus">Подключение...</div>
+        
+        <div class="drop-zone" id="dropZone">
+            <p>Перетащите файлы сюда или кликните для выбора</p>
+            <input type="file" id="fileInput" multiple style="display: none">
+        </div>
+
+        <div class="file-list" id="fileList"></div>
+
+        <div class="button-container">
+            <button class="analyze-button" onclick="fileAnalyzer.analyzeFiles()" id="analyzeButton">Анализировать файлы</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <p>Анализ файлов...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="results" id="results"></div>
+
+        <div class="stats" id="stats">
+            <h3>Общая статистика</h3>
+            <div class="stats-grid" id="statsGrid">
+                <!-- Статистика будет добавлена динамически -->
+            </div>
+            <button class="refresh-stats" onclick="fileAnalyzer.refreshStats()">Обновить статистику</button>
+        </div>
+    </div>
+
+    <script>
+        class FileAnalyzer {
+            constructor() {
+                this.ws = null;
+                this.files = new Map();
+                this.results = new Map();
+                this.connected = false;
+                this.initializeWebSocket();
+                this.initializeEventListeners();
+            }
+
+            initializeWebSocket() {
+                this.ws = new WebSocket('ws://localhost:8765');
+
+                this.ws.onopen = () => {
+                    this.connected = true;
+                    this.updateConnectionStatus(true);
+                    this.showMessage('Подключено к серверу', 'success');
+                };
+
+                this.ws.onclose = () => {
+                    this.connected = false;
+                    this.updateConnectionStatus(false);
+                    this.showMessage('Соединение потеряно', 'error');
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    this.showMessage('Ошибка соединения с сервером', 'error');
+                };
+
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleMessage(data);
+                };
+            }
+
+            initializeEventListeners() {
+                const dropZone = document.getElementById('dropZone');
+                const fileInput = document.getElementById('fileInput');
+
+                dropZone.addEventListener('click', () => fileInput.click());
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('dragover');
+                });
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('dragover');
+                });
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('dragover');
+                    this.handleFiles(e.dataTransfer.files);
+                });
+                fileInput.addEventListener('change', (e) => {
+                    this.handleFiles(e.target.files);
+                });
+            }
+
+            handleFiles(fileList) {
+                Array.from(fileList).forEach(file => {
+                    if (file.type === 'text/plain') {
+                        this.files.set(file.name, file);
+                        this.updateFileList();
+                    } else {
+                        this.showMessage(`${file.name} не является текстовым файлом`, 'error');
+                    }
+                });
+            }
+
+            updateFileList() {
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = '';
+                this.files.forEach((file, name) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <span>${name}</span>
+                        <button onclick="fileAnalyzer.removeFile('${name}')">Удалить</button>
+                    `;
+                    fileList.appendChild(fileItem);
+                });
+            }
+
+            removeFile(name) {
+                this.files.delete(name);
+                this.results.delete(name);
+                this.updateFileList();
+                this.updateResults();
+                this.refreshStats();
+            }
+
+            async analyzeFiles() {
+                if (!this.connected) {
+                    this.showMessage('Нет соединения с сервером', 'error');
+                    return;
+                }
+
+                if (this.files.size === 0) {
+                    this.showMessage('Нет файлов для анализа', 'error');
+                    return;
+                }
+
+                this.showLoading(true);
+                this.results.clear();
+                this.updateResults();
+
+                try {
+                    const filesData = [];
+                    for (const [name, file] of this.files) {
+                        const content = await this.readFile(file);
+                        filesData.push({
+                            filename: name,
+                            content: content
+                        });
+                    }
+
+                    this.ws.send(JSON.stringify({
+                        type: 'files',
+                        files: filesData
+                    }));
+                } catch (error) {
+                    this.showMessage('Ошибка при чтении файлов', 'error');
+                    console.error('Ошибка:', error);
+                }
+            }
+
+            readFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsText(file);
+                });
+            }
+
+            handleMessage(data) {
+                switch (data.type) {
+                    case 'analysis':
+                        this.results.set(data.filename, data);
+                        this.updateResults();
+                        this.refreshStats();
+                        if (this.results.size === this.files.size) {
+                            this.showLoading(false);
+                        }
+                        break;
+                    case 'stats':
+                        this.updateStats(data.stats);
+                        break;
+                    case 'error':
+                        this.showMessage(data.message, 'error');
+                        this.showLoading(false);
+                        break;
+                }
+            }
+
+            updateResults() {
+                const results = document.getElementById('results');
+                results.innerHTML = '';
+                this.results.forEach((result, filename) => {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'result-item';
+                    resultItem.innerHTML = `
+                        <strong>${filename}:</strong><br>
+                        Слов: ${result.word_count}<br>
+                        Символов: ${result.char_count}<br>
+                        Строк: ${result.line_count}
+                    `;
+                    results.appendChild(resultItem);
+                });
+            }
+
+            updateStats(stats) {
+                const statsGrid = document.getElementById('statsGrid');
+                statsGrid.innerHTML = `
+                    <div class="stats-item">
+                        <div class="value">${stats.total_files}</div>
+                        <div class="label">Всего файлов</div>
+                    </div>
+                    <div class="stats-item">
+                        <div class="value">${stats.total_words}</div>
+                        <div class="label">Всего слов</div>
+                    </div>
+                    <div class="stats-item">
+                        <div class="value">${stats.total_chars}</div>
+                        <div class="label">Всего символов</div>
+                    </div>
+                    <div class="stats-item">
+                        <div class="value">${stats.total_lines}</div>
+                        <div class="label">Всего строк</div>
+                    </div>
+                    <div class="stats-item">
+                        <div class="value">${Math.round(stats.average_words)}</div>
+                        <div class="label">Среднее количество слов</div>
+                    </div>
+                    <div class="stats-item">
+                        <div class="value">${Math.round(stats.average_chars)}</div>
+                        <div class="label">Среднее количество символов</div>
+                    </div>
+                    <div class="stats-item">
+                        <div class="value">${Math.round(stats.average_lines)}</div>
+                        <div class="label">Среднее количество строк</div>
+                    </div>
+                `;
+            }
+
+            refreshStats() {
+                if (this.connected) {
+                    this.ws.send(JSON.stringify({ type: 'get_stats' }));
+                }
+            }
+
+            showLoading(show) {
+                const loading = document.getElementById('loading');
+                loading.style.display = show ? 'block' : 'none';
+            }
+
+            showMessage(message, type) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = type;
+                messageDiv.textContent = message;
+                document.getElementById('results').appendChild(messageDiv);
+            }
+
+            updateConnectionStatus(connected) {
+                const status = document.getElementById('connectionStatus');
+                status.textContent = connected ? 'Подключено' : 'Отключено';
+                status.className = `connection-status ${connected ? 'connected' : 'disconnected'}`;
+            }
+        }
+
+        const fileAnalyzer = new FileAnalyzer();
+    </script>
+</body>
+</html> 
