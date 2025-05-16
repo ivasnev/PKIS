@@ -3,7 +3,8 @@ import json
 import uuid
 import logging
 from datetime import datetime
-from typing import Dict, List, Set, Optional
+from collections import deque
+from typing import Dict, List, Set, Optional, Deque
 
 from utils.game_logic import GameLogic
 from utils.xml_handler import XMLHandler
@@ -47,7 +48,10 @@ class GameServer(IGameServer):
         # Словарь для хранения соединений игроков
         self.players: Dict[str, asyncio.StreamWriter] = {}
         
-        # Набор игроков, ожидающих начала игры
+        # Набор игроков, ожидающих начала игры (в порядке очереди)
+        self.waiting_queue: Deque[str] = deque()
+        
+        # Набор всех ожидающих игроков
         self.waiting_players: Set[str] = set()
         
         # Набор игроков в текущей игре
@@ -76,6 +80,9 @@ class GameServer(IGameServer):
         
         # Флаг работы сервера
         self.running = False
+        
+        # Флаг автоматического запуска игры (по умолчанию выключен)
+        self.auto_start = False
     
     async def start(self):
         """Запускает сервер"""
@@ -91,6 +98,34 @@ class GameServer(IGameServer):
         async with server:
             await server.serve_forever()
     
+    async def broadcast_waiting_info(self):
+        """Отправляет всем игрокам информацию об очереди"""
+        # Формируем список ожидающих игроков в порядке очереди
+        waiting_list = list(self.waiting_queue)
+        
+        # Отправляем общую информацию всем игрокам
+        await self.broadcast_message({
+            "type": "waiting_info",
+            "count": len(waiting_list),
+            "required": self.min_players
+        }, exclude=[])
+        
+        # Отправляем персональную информацию каждому ожидающему игроку
+        for i, player_id in enumerate(waiting_list):
+            # Рассчитываем позицию в очереди (начиная с 1)
+            position = i + 1
+            
+            # Определяем, попадет ли игрок в следующую игру
+            will_play_next = position <= self.max_players and len(waiting_list) >= self.min_players
+            
+            # Отправляем информацию
+            await self.send_message(player_id, {
+                "type": "queue_position",
+                "position": position,
+                "will_play_next": will_play_next,
+                "total_waiting": len(waiting_list)
+            })
+    
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """
         Обрабатывает подключение нового клиента
@@ -103,7 +138,10 @@ class GameServer(IGameServer):
         
         # Сохраняем соединение
         self.players[player_id] = writer
+        
+        # Добавляем игрока в очередь ожидания
         self.waiting_players.add(player_id)
+        self.waiting_queue.append(player_id)
         
         # Отправляем приветственное сообщение
         await self.send_message(player_id, {
@@ -113,6 +151,9 @@ class GameServer(IGameServer):
         })
         
         logger.info(f"Новый игрок подключился: {player_id}")
+        
+        # Информируем всех о количестве ожидающих игроков и их позициях
+        await self.broadcast_waiting_info()
         
         # Проверяем, можно ли начать игру
         await self.check_start_game()
@@ -148,7 +189,15 @@ class GameServer(IGameServer):
         if player_id in self.players:
             del self.players[player_id]
         
+        # Удаляем из очереди ожидания
         self.waiting_players.discard(player_id)
+        
+        # Удаляем из очереди деке
+        try:
+            self.waiting_queue.remove(player_id)
+        except ValueError:
+            pass
+        
         self.active_players.discard(player_id)
         
         if player_id in self.player_queue:
@@ -158,8 +207,8 @@ class GameServer(IGameServer):
         if self.current_game_id and len(self.active_players) < self.min_players:
             await self.end_game(None)
             
-            # Пытаемся начать новую игру с оставшимися игроками
-            await self.check_start_game()
+        # Информируем всех о количестве ожидающих игроков и их позициях
+        await self.broadcast_waiting_info()
     
     async def process_message(self, player_id: str, data: bytes):
         """
@@ -194,6 +243,29 @@ class GameServer(IGameServer):
                     "player_id": player_id,
                     "text": text
                 }, exclude=[])
+                
+            elif message_type == "start_game":
+                # Проверяем, можно ли начать игру
+                if player_id in self.waiting_players and not self.current_game_id:
+                    if len(self.waiting_players) >= self.min_players:
+                        await self.start_game()
+                        await self.broadcast_message({
+                            "type": "chat",
+                            "player_id": "SERVER",
+                            "text": f"Игра начата по запросу игрока {player_id}"
+                        }, exclude=[])
+                    else:
+                        await self.send_message(player_id, {
+                            "type": "error",
+                            "message": f"Недостаточно игроков для начала игры. Минимальное число: {self.min_players}"
+                        })
+                        # Обновляем информацию о позиции в очереди
+                        await self.broadcast_waiting_info()
+                else:
+                    await self.send_message(player_id, {
+                        "type": "error",
+                        "message": "Вы не можете запустить игру сейчас"
+                    })
                 
         except json.JSONDecodeError:
             logger.error(f"Получены некорректные данные от игрока {player_id}")
@@ -262,8 +334,8 @@ class GameServer(IGameServer):
     
     async def check_start_game(self):
         """Проверяет, можно ли начать новую игру"""
-        # Если нет активной игры и достаточно ожидающих игроков
-        if (not self.current_game_id and 
+        # Если нет активной игры, достаточно ожидающих игроков и включен автоматический запуск
+        if (not self.current_game_id and self.auto_start and
             self.min_players <= len(self.waiting_players) <= self.max_players):
             
             # Начинаем игру
@@ -275,9 +347,23 @@ class GameServer(IGameServer):
         self.current_game_id = str(uuid.uuid4())
         self.game_start_time = datetime.now()
         
-        # Переносим игроков из ожидающих в активные
-        self.active_players = set(list(self.waiting_players)[:self.max_players])
-        self.waiting_players -= self.active_players
+        # Выбираем первых n игроков из очереди ожидания
+        selected_players = []
+        
+        # Берем первых max_players игроков из очереди
+        for _ in range(min(self.max_players, len(self.waiting_queue))):
+            if self.waiting_queue:
+                player_id = self.waiting_queue.popleft()
+                # Проверяем, что игрок все еще подключен
+                if player_id in self.players:
+                    selected_players.append(player_id)
+                    self.waiting_players.discard(player_id)
+        
+        # Устанавливаем активных игроков
+        self.active_players = set(selected_players)
+        
+        # Обновляем информацию об очереди для оставшихся ожидающих игроков
+        await self.broadcast_waiting_info()
         
         # Формируем очередь игроков
         self.player_queue = list(self.active_players)
@@ -346,15 +432,22 @@ class GameServer(IGameServer):
             "player_attempts": player_attempts
         }, exclude=[])
         
+        # Перемещаем активных игроков в конец очереди ожидания
+        active_players = list(self.active_players)
+        for player_id in active_players:
+            if player_id in self.players:  # Проверяем, что игрок всё еще подключен
+                self.waiting_players.add(player_id)
+                self.waiting_queue.append(player_id)
+        
+        # Оповещаем о количестве ожидающих игроков и их позициях
+        await self.broadcast_waiting_info()
+        
         # Сбрасываем состояние
         self.current_game_id = None
         self.game_start_time = None
         self.active_players = set()
         self.player_queue.clear()
         self.current_player_index = 0
-        
-        # Пробуем начать новую игру
-        await self.check_start_game()
     
     async def send_message(self, player_id: str, message: Dict):
         """

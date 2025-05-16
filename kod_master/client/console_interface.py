@@ -6,7 +6,7 @@ from typing import Dict, Optional, List, Type
 
 from utils.interfaces import IClientInterface, IGameClient, ICommandHandler, IMessageHandler
 from client.client import GameClient
-from client.command_handlers import HelpCommandHandler, GuessCommandHandler, ChatCommandHandler, StatusCommandHandler, ExitCommandHandler
+from client.command_handlers import HelpCommandHandler, GuessCommandHandler, ChatCommandHandler, StatusCommandHandler, ExitCommandHandler, StartCommandHandler
 
 # Настройка логирования
 logging.basicConfig(
@@ -45,7 +45,8 @@ class ConsoleInterface(IClientInterface):
             GuessCommandHandler(self.client),
             ChatCommandHandler(self.client),
             StatusCommandHandler(self.client),
-            ExitCommandHandler(self)
+            ExitCommandHandler(self),
+            StartCommandHandler(self.client)
         ]
         
         for handler in default_handlers:

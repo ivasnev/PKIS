@@ -48,6 +48,11 @@ class GameClient(IGameClient):
         # Список игроков в текущей игре
         self.players: List[str] = []
         
+        # Информация об очереди
+        self.queue_position = 0
+        self.total_in_queue = 0
+        self.will_play_next = False
+        
         # Обработчики сообщений
         self.message_handlers: Dict[str, List[IMessageHandler]] = {}
         
@@ -189,6 +194,13 @@ class GameClient(IGameClient):
                 "code_length": message.get("code_length", 4),
                 "allowed_attempts": message.get("allowed_attempts", 10)
             }
+            
+            # Сбрасываем информацию об очереди при начале игры
+            if self.player_id in self.players:
+                self.queue_position = 0
+                self.total_in_queue = 0
+                self.will_play_next = False
+                
             logger.info(f"Игра началась. ID: {self.current_game_id}")
         
         # Обработка окончания игры
@@ -206,6 +218,27 @@ class GameClient(IGameClient):
                 logger.info(f"Игра завершена без победителя. Секретный код: {secret_code}")
                 
             self.current_game_id = None
+        
+        # Обработка информации об ожидающих игроках
+        elif message_type == "waiting_info":
+            count = message.get("count", 0)
+            required = message.get("required", 2)
+            logger.info(f"Ожидающих игроков: {count}/{required}. Используйте команду 'start' для запуска игры.")
+        
+        # Обработка информации о позиции в очереди
+        elif message_type == "queue_position":
+            position = message.get("position", 0)
+            total = message.get("total_waiting", 0)
+            will_play_next = message.get("will_play_next", False)
+            
+            # Обновляем информацию о позиции в очереди только если мы не в активной игре
+            if not self.game_active:
+                self.queue_position = position
+                self.total_in_queue = total
+                self.will_play_next = will_play_next
+                
+                status = "в следующей игре" if will_play_next else "ожидание"
+                logger.info(f"Ваша позиция в очереди: {position} из {total} ({status})")
         
         # Обработка сообщения о ходе
         elif message_type == "your_turn":
