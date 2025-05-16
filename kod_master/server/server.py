@@ -7,6 +7,7 @@ from typing import Dict, List, Set, Optional
 
 from utils.game_logic import GameLogic
 from utils.xml_handler import XMLHandler
+from utils.interfaces import IGameServer, IGameLogic, IXMLHandler
 
 # Настройка логирования
 logging.basicConfig(
@@ -16,12 +17,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class GameServer:
+class GameServer(IGameServer):
     """Класс сервера для игры 'Код-Мастер'"""
     
     def __init__(self, host: str = '0.0.0.0', port: int = 8888,
                  min_players: int = 2, max_players: int = 4,
-                 code_length: int = 4, allowed_attempts: int = 10):
+                 code_length: int = 4, allowed_attempts: int = 10,
+                 game_logic: Optional[IGameLogic] = None,
+                 xml_handler: Optional[IXMLHandler] = None):
         """
         Инициализация сервера
         
@@ -31,6 +34,8 @@ class GameServer:
         :param max_players: Максимальное количество игроков
         :param code_length: Длина секретного кода
         :param allowed_attempts: Максимальное количество попыток
+        :param game_logic: Объект игровой логики
+        :param xml_handler: Объект обработчика XML
         """
         self.host = host
         self.port = port
@@ -53,7 +58,7 @@ class GameServer:
         self.current_player_index = 0
         
         # Объект игровой логики
-        self.game_logic = GameLogic(
+        self.game_logic = game_logic or GameLogic(
             code_length=code_length,
             allowed_attempts=allowed_attempts,
             min_players=min_players,
@@ -61,7 +66,7 @@ class GameServer:
         )
         
         # Обработчик XML
-        self.xml_handler = XMLHandler()
+        self.xml_handler = xml_handler or XMLHandler()
         
         # Идентификатор текущей игры
         self.current_game_id: Optional[str] = None

@@ -4,8 +4,10 @@ from xml.dom import minidom
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from utils.interfaces import IXMLHandler
 
-class XMLHandler:
+
+class XMLHandler(IXMLHandler):
     """Класс для работы с XML-файлами результатов игры"""
     
     def __init__(self, save_dir: str = "game_results"):

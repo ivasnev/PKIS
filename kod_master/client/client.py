@@ -3,6 +3,8 @@ import json
 import logging
 from typing import Optional, Dict, List, Callable
 
+from utils.interfaces import IGameClient, IMessageHandler
+
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
@@ -11,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class GameClient:
+class GameClient(IGameClient):
     """Класс клиента для игры 'Код-Мастер'"""
     
     def __init__(self, host: str = 'localhost', port: int = 8888):
@@ -47,7 +49,7 @@ class GameClient:
         self.players: List[str] = []
         
         # Обработчики сообщений
-        self.message_handlers: Dict[str, List[Callable]] = {}
+        self.message_handlers: Dict[str, List[IMessageHandler]] = {}
         
         # Флаг подключения
         self.connected = False
@@ -254,11 +256,11 @@ class GameClient:
         handlers = self.message_handlers.get(message_type, [])
         for handler in handlers:
             try:
-                handler(message)
+                await handler.handle(message)
             except Exception as e:
-                logger.error(f"Ошибка в обработчике {handler.__name__}: {e}")
+                logger.error(f"Ошибка в обработчике: {e}")
     
-    def add_message_handler(self, message_type: str, handler: Callable):
+    def add_message_handler(self, message_type: str, handler: IMessageHandler):
         """
         Добавляет обработчик сообщений определенного типа
         
@@ -270,7 +272,7 @@ class GameClient:
             
         self.message_handlers[message_type].append(handler)
     
-    def remove_message_handler(self, message_type: str, handler: Callable) -> bool:
+    def remove_message_handler(self, message_type: str, handler: IMessageHandler) -> bool:
         """
         Удаляет обработчик сообщений
         

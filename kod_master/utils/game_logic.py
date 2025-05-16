@@ -2,8 +2,10 @@ import random
 import string
 from typing import Tuple, List, Dict
 
+from utils.interfaces import IGameLogic
 
-class GameLogic:
+
+class GameLogic(IGameLogic):
     """Класс, отвечающий за логику игры 'Код-Мастер'"""
     
     def __init__(self, code_length: int = 4, allowed_attempts: int = 10, 
